@@ -139,9 +139,9 @@ func newNIC(stack *Stack, id tcpip.NICID, name string, ep LinkEndpoint, ctx NICC
 		context:          ctx,
 		stats:            makeNICStats(),
 		networkEndpoints: make(map[tcpip.NetworkProtocolNumber]NetworkEndpoint),
-		linkAddrCache:    newLinkAddrCache(ageLimit, resolutionTimeout, resolutionAttempts),
 	}
-	nic.linkResQueue.init()
+	nic.linkResQueue.init(nic)
+	nic.linkAddrCache = newLinkAddrCache(nic, ageLimit, resolutionTimeout, resolutionAttempts)
 	nic.mu.packetEPs = make(map[tcpip.NetworkProtocolNumber]*packetEndpointList)
 
 	// Check for Neighbor Unreachability Detection support.
@@ -303,6 +303,10 @@ func (n *NIC) IsLoopback() bool {
 
 // WritePacket implements NetworkLinkEndpoint.
 func (n *NIC) WritePacket(r *Route, gso *GSO, protocol tcpip.NetworkProtocolNumber, pkt *PacketBuffer) *tcpip.Error {
+	_, err := n.enqueuePacketBuffer(r, gso, protocol, pkt)
+	return err
+}
+func (n *NIC) enqueuePacketBuffer(r *Route, gso *GSO, protocol tcpip.NetworkProtocolNumber, pkt pendingPacketBuffer) (int, *tcpip.Error) {
 	// As per relevant RFCs, we should queue packets while we wait for link
 	// resolution to complete.
 	//
@@ -320,16 +324,7 @@ func (n *NIC) WritePacket(r *Route, gso *GSO, protocol tcpip.NetworkProtocolNumb
 	//   be limited to some small value. When a queue overflows, the new arrival
 	//   SHOULD replace the oldest entry. Once address resolution completes, the
 	//   node transmits any queued packets.
-	if ch, err := r.Resolve(nil); err != nil {
-		if err == tcpip.ErrWouldBlock {
-			r.Acquire()
-			n.linkResQueue.enqueue(ch, r, protocol, pkt)
-			return nil
-		}
-		return err
-	}
-
-	return n.writePacket(r.Fields(), gso, protocol, pkt)
+	return n.linkResQueue.enqueue(r, gso, protocol, pkt)
 }
 
 // WritePacketToRemote implements NetworkInterface.
@@ -358,16 +353,17 @@ func (n *NIC) writePacket(r RouteInfo, gso *GSO, protocol tcpip.NetworkProtocolN
 
 // WritePackets implements NetworkLinkEndpoint.
 func (n *NIC) WritePackets(r *Route, gso *GSO, pkts PacketBufferList, protocol tcpip.NetworkProtocolNumber) (int, *tcpip.Error) {
-	// TODO(gvisor.dev/issue/4458): Queue packets whie link address resolution
-	// is being peformed like WritePacket.
-	routeInfo := r.Fields()
+	return n.enqueuePacketBuffer(r, gso, protocol, &pkts)
+}
+
+func (n *NIC) writePackets(r RouteInfo, gso *GSO, protocol tcpip.NetworkProtocolNumber, pkts PacketBufferList) (int, *tcpip.Error) {
 	for pkt := pkts.Front(); pkt != nil; pkt = pkt.Next() {
-		pkt.EgressRoute = routeInfo
+		pkt.EgressRoute = r
 		pkt.GSOOptions = gso
 		pkt.NetworkProtocolNumber = protocol
 	}
 
-	writtenPackets, err := n.LinkEndpoint.WritePackets(routeInfo, gso, pkts, protocol)
+	writtenPackets, err := n.LinkEndpoint.WritePackets(r, gso, pkts, protocol)
 	n.stats.Tx.Packets.IncrementBy(uint64(writtenPackets))
 	writtenBytes := 0
 	for i, pb := 0, pkts.Front(); i < writtenPackets && pb != nil; i, pb = i+1, pb.Next() {
