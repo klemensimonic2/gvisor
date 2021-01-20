@@ -231,17 +231,22 @@ func TestNeighorSolicitationWithSourceLinkLayerOption(t *testing.T) {
 				Data: hdr.View().ToVectorisedView(),
 			}))
 
-			linkAddr, c, err := s.GetLinkAddress(nicID, lladdr1, lladdr0, ProtocolNumber, nil)
+			ch := make(chan tcpip.LinkAddress, 1)
+			err := s.GetLinkAddress(nicID, lladdr1, lladdr0, ProtocolNumber, func(linkAddr tcpip.LinkAddress, ok bool) {
+				if ok {
+					ch <- linkAddr
+				} else {
+					ch <- ""
+				}
+			})
+			linkAddr := <-ch
 			if linkAddr != test.expectedLinkAddr {
 				t.Errorf("got link address = %s, want = %s", linkAddr, test.expectedLinkAddr)
 			}
 
 			if test.expectedLinkAddr != "" {
 				if err != nil {
-					t.Errorf("s.GetLinkAddress(%d, %s, %s, %d, nil): %s", nicID, lladdr1, lladdr0, ProtocolNumber, err)
-				}
-				if c != nil {
-					t.Errorf("got unexpected channel")
+					t.Errorf("s.GetLinkAddress(%d, %s, %s, %d, _): %s", nicID, lladdr1, lladdr0, ProtocolNumber, err)
 				}
 
 				// Invalid count should not have increased.
@@ -250,10 +255,7 @@ func TestNeighorSolicitationWithSourceLinkLayerOption(t *testing.T) {
 				}
 			} else {
 				if err != tcpip.ErrWouldBlock {
-					t.Errorf("got s.GetLinkAddress(%d, %s, %s, %d, nil) = (_, _, %v), want = (_, _, %s)", nicID, lladdr1, lladdr0, ProtocolNumber, err, tcpip.ErrWouldBlock)
-				}
-				if c == nil {
-					t.Errorf("expected channel from call to s.GetLinkAddress(%d, %s, %s, %d, nil)", nicID, lladdr1, lladdr0, ProtocolNumber)
+					t.Errorf("got s.GetLinkAddress(%d, %s, %s, %d, _) = %s, want = %s", nicID, lladdr1, lladdr0, ProtocolNumber, err, tcpip.ErrWouldBlock)
 				}
 
 				// Invalid count should have increased.
@@ -803,17 +805,22 @@ func TestNeighorAdvertisementWithTargetLinkLayerOption(t *testing.T) {
 				Data: hdr.View().ToVectorisedView(),
 			}))
 
-			linkAddr, c, err := s.GetLinkAddress(nicID, lladdr1, lladdr0, ProtocolNumber, nil)
+			ch := make(chan tcpip.LinkAddress, 1)
+			err := s.GetLinkAddress(nicID, lladdr1, lladdr0, ProtocolNumber, func(linkAddr tcpip.LinkAddress, ok bool) {
+				if ok {
+					ch <- linkAddr
+				} else {
+					ch <- ""
+				}
+			})
+			linkAddr := <-ch
 			if linkAddr != test.expectedLinkAddr {
 				t.Errorf("got link address = %s, want = %s", linkAddr, test.expectedLinkAddr)
 			}
 
 			if test.expectedLinkAddr != "" {
 				if err != nil {
-					t.Errorf("s.GetLinkAddress(%d, %s, %s, %d, nil): %s", nicID, lladdr1, lladdr0, ProtocolNumber, err)
-				}
-				if c != nil {
-					t.Errorf("got unexpected channel")
+					t.Errorf("s.GetLinkAddress(%d, %s, %s, %d, _): %s", nicID, lladdr1, lladdr0, ProtocolNumber, err)
 				}
 
 				// Invalid count should not have increased.
@@ -822,10 +829,7 @@ func TestNeighorAdvertisementWithTargetLinkLayerOption(t *testing.T) {
 				}
 			} else {
 				if err != tcpip.ErrWouldBlock {
-					t.Errorf("got s.GetLinkAddress(%d, %s, %s, %d, nil) = (_, _, %v), want = (_, _, %s)", nicID, lladdr1, lladdr0, ProtocolNumber, err, tcpip.ErrWouldBlock)
-				}
-				if c == nil {
-					t.Errorf("expected channel from call to s.GetLinkAddress(%d, %s, %s, %d, nil)", nicID, lladdr1, lladdr0, ProtocolNumber)
+					t.Errorf("got s.GetLinkAddress(%d, %s, %s, %d, _) = %s, want = %s", nicID, lladdr1, lladdr0, ProtocolNumber, err, tcpip.ErrWouldBlock)
 				}
 
 				// Invalid count should have increased.

@@ -4384,10 +4384,11 @@ func TestGetLinkAddressErrors(t *testing.T) {
 		t.Fatalf("CreateNIC(%d, _) = %s", nicID, err)
 	}
 
-	if addr, _, err := s.GetLinkAddress(unknownNICID, "", "", ipv4.ProtocolNumber, nil); err != tcpip.ErrUnknownNICID {
-		t.Errorf("got s.GetLinkAddress(%d, '', '', %d, nil) = (%s, _, %s), want = (_, _, %s)", unknownNICID, ipv4.ProtocolNumber, addr, err, tcpip.ErrUnknownNICID)
+	noop := func(tcpip.LinkAddress, bool) {}
+	if err := s.GetLinkAddress(unknownNICID, "", "", ipv4.ProtocolNumber, noop); err != tcpip.ErrUnknownNICID {
+		t.Errorf("got s.GetLinkAddress(%d, '', '', %d, _) = %s, want = %s", unknownNICID, ipv4.ProtocolNumber, err, tcpip.ErrUnknownNICID)
 	}
-	if addr, _, err := s.GetLinkAddress(nicID, "", "", ipv4.ProtocolNumber, nil); err != tcpip.ErrNotSupported {
-		t.Errorf("got s.GetLinkAddress(%d, '', '', %d, nil) = (%s, _, %s), want = (_, _, %s)", unknownNICID, ipv4.ProtocolNumber, addr, err, tcpip.ErrNotSupported)
+	if err := s.GetLinkAddress(nicID, "", "", ipv4.ProtocolNumber, noop); err != tcpip.ErrNotSupported {
+		t.Errorf("got s.GetLinkAddress(%d, '', '', %d, _) = %s, want = %s", unknownNICID, ipv4.ProtocolNumber, err, tcpip.ErrNotSupported)
 	}
 }

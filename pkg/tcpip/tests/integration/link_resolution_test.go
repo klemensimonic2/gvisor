@@ -432,24 +432,17 @@ func TestGetLinkAddress(t *testing.T) {
 
 					host1Stack, _ := setupStack(t, stackOpts, host1NICID, host2NICID)
 
-					for i := 0; i < 2; i++ {
-						addr, ch, err := host1Stack.GetLinkAddress(host1NICID, test.remoteAddr, "", test.netProto, func(tcpip.LinkAddress, bool) {})
-						var want *tcpip.Error
-						if i == 0 {
-							want = tcpip.ErrWouldBlock
+					ch := make(chan tcpip.LinkAddress, 1)
+					err := host1Stack.GetLinkAddress(host1NICID, test.remoteAddr, "", test.netProto, func(linkAddr tcpip.LinkAddress, ok bool) {
+						if ok {
+							ch <- linkAddr
 						}
-						if err != want {
-							t.Fatalf("got host1Stack.GetLinkAddress(%d, %s, '', %d, _) = (%s, _, %s), want = (_, _, %s)", host1NICID, test.remoteAddr, test.netProto, addr, err, want)
-						}
-
-						if i == 0 {
-							<-ch
-							continue
-						}
-
-						if addr != linkAddr2 {
-							t.Fatalf("got addr = %s, want = %s", addr, linkAddr2)
-						}
+					})
+					if err != tcpip.ErrWouldBlock {
+						t.Fatalf("got host1Stack.GetLinkAddress(%d, %s, '', %d, _) = %s, want = %s", host1NICID, test.remoteAddr, test.netProto, err, tcpip.ErrWouldBlock)
+					}
+					if addr := <-ch; addr != linkAddr2 {
+						t.Fatalf("got addr = %s, want = %s", addr, linkAddr2)
 					}
 				})
 			}

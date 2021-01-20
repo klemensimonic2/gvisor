@@ -139,9 +139,9 @@ func newNIC(stack *Stack, id tcpip.NICID, name string, ep LinkEndpoint, ctx NICC
 		context:          ctx,
 		stats:            makeNICStats(),
 		networkEndpoints: make(map[tcpip.NetworkProtocolNumber]NetworkEndpoint),
-		linkAddrCache:    newLinkAddrCache(ageLimit, resolutionTimeout, resolutionAttempts),
 	}
-	nic.linkResQueue.init()
+	nic.linkResQueue.init(nic)
+	nic.linkAddrCache = newLinkAddrCache(nic, ageLimit, resolutionTimeout, resolutionAttempts)
 	nic.mu.packetEPs = make(map[tcpip.NetworkProtocolNumber]*packetEndpointList)
 
 	// Check for Neighbor Unreachability Detection support.
@@ -320,16 +320,7 @@ func (n *NIC) WritePacket(r *Route, gso *GSO, protocol tcpip.NetworkProtocolNumb
 	//   be limited to some small value. When a queue overflows, the new arrival
 	//   SHOULD replace the oldest entry. Once address resolution completes, the
 	//   node transmits any queued packets.
-	if ch, err := r.Resolve(nil); err != nil {
-		if err == tcpip.ErrWouldBlock {
-			r.Acquire()
-			n.linkResQueue.enqueue(ch, r, protocol, pkt)
-			return nil
-		}
-		return err
-	}
-
-	return n.writePacket(r.Fields(), gso, protocol, pkt)
+	return n.linkResQueue.enqueue(r, gso, protocol, pkt)
 }
 
 // WritePacketToRemote implements NetworkInterface.
